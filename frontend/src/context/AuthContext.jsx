@@ -28,7 +28,13 @@ export const AuthProvider = ({ children }) => {
                 const payload = JSON.parse(atob(token.split('.')[1]));
                 const isExpired = payload.exp * 1000 < Date.now();
                 if (!isExpired) {
-                    setUser({ token, username: payload.username || 'Admin' });
+                    setUser({
+                        token,
+                        username: payload.username || 'Admin',
+                        role: payload.role || 'ADMIN',
+                        socio_id: payload.socio_id || null,
+                        entrenador_id: payload.entrenador_id || null
+                    });
                 } else {
                     // Token expirado — limpiar
                     localStorage.removeItem('access_token');
@@ -58,7 +64,13 @@ export const AuthProvider = ({ children }) => {
 
             // Decodificar el token para obtener info del usuario
             const payload = JSON.parse(atob(access.split('.')[1]));
-            setUser({ token: access, username: payload.username || username });
+            setUser({
+                token: access,
+                username: payload.username || username,
+                role: payload.role || 'ADMIN',
+                socio_id: payload.socio_id || null,
+                entrenador_id: payload.entrenador_id || null
+            });
 
             return { success: true };
         } catch (error) {

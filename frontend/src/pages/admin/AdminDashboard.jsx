@@ -199,6 +199,524 @@ function EntrenadorForm({ initial = {}, onSave, onCancel }) {
     );
 }
 
+function ReservaForm({ initial = {}, onSave, onCancel, currentUser }) {
+    const isSocio = currentUser?.role === 'SOCIO';
+    const isEntrenador = currentUser?.role === 'ENTRENADOR';
+
+    const [form, setForm] = useState({
+        socio: isSocio ? currentUser.socio_id : '',
+        zona: '',
+        entrenador: isEntrenador ? currentUser.entrenador_id : '',
+        fecha_reserva: '',
+        estado: 'CONFIRMADA',
+        ...initial,
+    });
+    const [socios, setSocios] = useState([]);
+    const [zonas, setZonas] = useState([]);
+    const [entrenadores, setEntrenadores] = useState([]);
+    const [loadingOpts, setLoadingOpts] = useState(true);
+
+    useEffect(() => {
+        Promise.all([
+            sociosService.getAll(),
+            zonasService.getAll(),
+            entrenadoresService.getAll(),
+        ]).then(([s, z, e]) => {
+            setSocios(s.data);
+            setZonas(z.data);
+            setEntrenadores(e.data);
+        }).finally(() => setLoadingOpts(false));
+    }, []);
+
+    // Asegurarse de que si es Socio o Entrenador, se guarden sus IDs correctos al iniciar
+    useEffect(() => {
+        if (isSocio && currentUser.socio_id) {
+            setForm(prev => ({ ...prev, socio: currentUser.socio_id }));
+        }
+        if (isEntrenador && currentUser.entrenador_id) {
+            setForm(prev => ({ ...prev, entrenador: currentUser.entrenador_id }));
+        }
+    }, [isSocio, isEntrenador, currentUser]);
+
+    const f = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+    if (loadingOpts) return <div style={{ color: '#aaa', padding: 20 }}>Cargando opciones...</div>;
+
+    return (
+        <form onSubmit={(e) => { e.preventDefault(); onSave(form); }}>
+            <div style={styles.formGrid}>
+                {/* Campo Socio */}
+                {isSocio ? (
+                    <label style={styles.label}>Socio
+                        <input
+                            style={{ ...styles.input, opacity: 0.7 }}
+                            value={socios.find(s => Number(s.id) === Number(currentUser.socio_id)) ? `${socios.find(s => Number(s.id) === Number(currentUser.socio_id)).nombre} ${socios.find(s => Number(s.id) === Number(currentUser.socio_id)).apellido}` : 'Cargando socio...' }
+                            disabled
+                        />
+                    </label>
+                ) : (
+                    <label style={styles.label}>Socio {isEntrenador ? '' : '*'}
+                        <select style={styles.input} value={form.socio} onChange={f('socio')} required={!isEntrenador}>
+                            <option value="">-- Seleccionar socio --</option>
+                            {socios.map(s => (
+                                <option key={s.id} value={s.id}>{s.nombre} {s.apellido} ({s.cedula})</option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+
+                {/* Campo Zona */}
+                <label style={styles.label}>Zona *
+                    <select style={styles.input} value={form.zona} onChange={f('zona')} required>
+                        <option value="">-- Seleccionar zona --</option>
+                        {zonas.map(z => (
+                            <option key={z.id} value={z.id}>{z.nombre}</option>
+                        ))}
+                    </select>
+                </label>
+
+                {/* Campo Entrenador */}
+                {isEntrenador ? (
+                    <label style={styles.label}>Entrenador
+                        <input
+                            style={{ ...styles.input, opacity: 0.7 }}
+                            value={entrenadores.find(e => Number(e.id) === Number(currentUser.entrenador_id)) ? `${entrenadores.find(e => Number(e.id) === Number(currentUser.entrenador_id)).nombre} ${entrenadores.find(e => Number(e.id) === Number(currentUser.entrenador_id)).apellido}` : 'Cargando entrenador...' }
+                            disabled
+                        />
+                    </label>
+                ) : (
+                    <label style={styles.label}>Entrenador
+                        <select style={styles.input} value={form.entrenador} onChange={f('entrenador')}>
+                            <option value="">-- Sin entrenador --</option>
+                            {entrenadores.map(e => (
+                                <option key={e.id} value={e.id}>{e.nombre} {e.apellido} · {e.especialidad}</option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+
+                {/* Campo Fecha */}
+                <label style={styles.label}>Fecha y Hora *
+                    <input style={styles.input} type="datetime-local" value={form.fecha_reserva} onChange={f('fecha_reserva')} required />
+                </label>
+
+                {/* Campo Estado */}
+                <label style={styles.label}>Estado *
+                    <select style={styles.input} value={form.estado} onChange={f('estado')} required>
+                        <option value="CONFIRMADA">Confirmada</option>
+                        <option value="CANCELADA">Cancelada</option>
+                        <option value="ASISTIO">Asistió</option>
+                    </select>
+                </label>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <button type="submit" style={styles.btnPrimary}><Icon name="save" /> Guardar</button>
+                <button type="button" onClick={onCancel} style={styles.btnSecondary}>Cancelar</button>
+            </div>
+        </form>
+    );
+}
+
+// ─── Vista Unificada de Reservas con Calendario ──────────────────────────────
+function ReservasUnifiedView({ currentUser }) {
+    const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'list'
+    const [zonas, setZonas] = useState([]);
+    const [selectedZona, setSelectedZona] = useState('');
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [reservas, setReservas] = useState([]);
+    const [sociosMap, setSociosMap] = useState({});
+    const [entrenadoresMap, setEntrenadoresMap] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [modal, setModal] = useState(null); // null | 'create' | 'edit'
+    const [selectedReserva, setSelectedReserva] = useState(null);
+    const [ticketData, setTicketData] = useState(null); // null | reserva details
+    const [error, setError] = useState('');
+    const [msg, setMsg] = useState('');
+
+    const HOURLY_SLOTS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+    const DAYS_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+    const getMonday = (d) => {
+        const date = new Date(d);
+        const day = date.getDay();
+        const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(date.setDate(diff));
+        monday.setHours(0, 0, 0, 0);
+        return monday;
+    };
+
+    const monday = getMonday(currentDate);
+    const weekDays = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return d;
+    });
+
+    const loadInitialData = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [zRes, sRes, eRes] = await Promise.all([
+                zonasService.getAll(),
+                sociosService.getAll(),
+                entrenadoresService.getAll(),
+            ]);
+
+            setZonas(zRes.data);
+            if (zRes.data.length > 0) {
+                setSelectedZona(zRes.data[0].id);
+            }
+
+            const sMap = {};
+            sRes.data.forEach(s => { sMap[s.id] = `${s.nombre} ${s.apellido}`; });
+            setSociosMap(sMap);
+
+            const eMap = {};
+            eRes.data.forEach(e => { eMap[e.id] = `${e.nombre} ${e.apellido}`; });
+            setEntrenadoresMap(eMap);
+        } catch (err) {
+            setError('Error al cargar datos base del sistema.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    const loadReservas = useCallback(async () => {
+        try {
+            const res = await reservasService.getAll();
+            setReservas(res.data);
+        } catch (err) {
+            setError('Error al cargar reservas.');
+        }
+    }, []);
+
+    useEffect(() => {
+        loadInitialData();
+        loadReservas();
+    }, [loadInitialData, loadReservas]);
+
+    const handleSave = async (form) => {
+        try {
+            let savedRes;
+            if (modal === 'create') {
+                savedRes = await reservasService.create(form);
+                setMsg('✅ Reserva creada con éxito.');
+            } else {
+                savedRes = await reservasService.update(selectedReserva.id, form);
+                setMsg('✅ Reserva actualizada con éxito.');
+            }
+
+            const savedData = savedRes.data;
+            const fullDetails = {
+                id: savedData.id,
+                socio: savedData.socio_nombre || sociosMap[savedData.socio] || 'Sin Socio / Bloqueo de Sala',
+                zona: zonas.find(z => Number(z.id) === Number(savedData.zona))?.nombre || 'Sala',
+                entrenador: entrenadoresMap[savedData.entrenador] || 'Sin Entrenador',
+                fecha: new Date(savedData.fecha_reserva).toLocaleString('es-EC', { dateStyle: 'long', timeStyle: 'short' }),
+                estado: savedData.estado
+            };
+
+            setModal(null);
+            setSelectedReserva(null);
+            loadReservas();
+
+            // Desplegar ticket al finalizar
+            setTicketData(fullDetails);
+        } catch (e) {
+            const detail = e.response?.data;
+            setError('Error: ' + JSON.stringify(detail));
+        }
+    };
+
+    const handleDelete = async (reserva) => {
+        if (!window.confirm('¿Desea cancelar esta reserva?')) return;
+        try {
+            await reservasService.delete(reserva.id);
+            setMsg('✅ Reserva eliminada correctamente.');
+            loadReservas();
+        } catch {
+            setError('No se pudo cancelar la reserva.');
+        }
+    };
+
+    const getReservaForSlot = (day, hour) => {
+        return reservas.find(r => {
+            const rDate = new Date(r.fecha_reserva);
+            return Number(r.zona) === Number(selectedZona) &&
+                   rDate.getFullYear() === day.getFullYear() &&
+                   rDate.getMonth() === day.getMonth() &&
+                   rDate.getDate() === day.getDate() &&
+                   rDate.getHours() === hour;
+        });
+    };
+
+    const handleSlotClick = (day, hour) => {
+        const year = day.getFullYear();
+        const month = String(day.getMonth() + 1).padStart(2, '0');
+        const dateStr = String(day.getDate()).padStart(2, '0');
+        const hourStr = String(hour).padStart(2, '0');
+        const localDateTime = `${year}-${month}-${dateStr}T${hourStr}:00`;
+
+        setSelectedReserva(null);
+        setError('');
+        setMsg('');
+        setModal('create');
+        setSelectedReserva({
+            zona: selectedZona,
+            fecha_reserva: localDateTime,
+            estado: 'CONFIRMADA'
+        });
+    };
+
+    if (loading) return <div style={styles.loading}>Cargando reservas y zonas...</div>;
+
+    const listColumns = [
+        { key: 'id', label: '#' },
+        { key: 'socio', label: 'Socio', render: (v, row) => row.socio_nombre || sociosMap[v] || 'Sin Socio (Bloqueo)' },
+        { key: 'zona', label: 'Zona', render: (v, row) => row.zona_nombre || 'Sala' },
+        { key: 'entrenador', label: 'Entrenador', render: (v, row) => row.entrenador_nombre || entrenadoresMap[v] || 'Sin Entrenador' },
+        { key: 'fecha_reserva', label: 'Fecha y Hora', render: (v) => v ? new Date(v).toLocaleString('es-EC') : '-' },
+        { key: 'estado', label: 'Estado' }
+    ];
+
+    const isAdmin = currentUser?.role === 'ADMIN';
+
+    return (
+        <div>
+            {/* Cabecera / Controles */}
+            <div style={styles.header}>
+                <div style={styles.selectorGroup}>
+                    {viewMode === 'calendar' && (
+                        <>
+                            <label style={styles.label}>Zona / Sala:</label>
+                            <select
+                                value={selectedZona}
+                                onChange={(e) => setSelectedZona(e.target.value)}
+                                style={styles.select}
+                            >
+                                {zonas.map(z => (
+                                    <option key={z.id} value={z.id}>{z.nombre}</option>
+                                ))}
+                            </select>
+                        </>
+                    )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {isAdmin && (
+                        <div style={styles.toggleGroup}>
+                            <button
+                                onClick={() => setViewMode('calendar')}
+                                style={{ ...styles.toggleBtn, background: viewMode === 'calendar' ? '#f36100' : '#333' }}
+                            >
+                                📅 Calendario
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                style={{ ...styles.toggleBtn, background: viewMode === 'list' ? '#f36100' : '#333' }}
+                            >
+                                📋 Listado
+                            </button>
+                        </div>
+                    )}
+                    <button
+                        onClick={() => {
+                            setSelectedReserva(null);
+                            setError('');
+                            setMsg('');
+                            setModal('create');
+                        }}
+                        style={styles.btnPrimary}
+                    >
+                        <Icon name="add" /> Reservar
+                    </button>
+                </div>
+            </div>
+
+            {msg && <div style={styles.success}>{msg}</div>}
+            {error && <div style={styles.errorMsg}>{error}</div>}
+
+            {/* Vista 1: Calendario Semanal */}
+            {viewMode === 'calendar' && (
+                <div>
+                    <div style={styles.calendarSubHeader}>
+                        <div style={styles.navigation}>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() - 7)))} style={styles.navBtn}>◀ Anterior</button>
+                            <button onClick={() => setCurrentDate(new Date())} style={styles.navBtn}>Hoy</button>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() + 7)))} style={styles.navBtn}>Siguiente ▶</button>
+                            <span style={styles.weekTitle}>
+                                Semana del {monday.toLocaleDateString('es-EC', { day: 'numeric', month: 'short' })} al {weekDays[6].toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div style={{ overflowX: 'auto', marginTop: 12 }}>
+                        <table style={styles.table}>
+                            <thead>
+                                <tr>
+                                    <th style={styles.timeColHeader}>Hora</th>
+                                    {weekDays.map((day, idx) => (
+                                        <th key={idx} style={styles.dayColHeader}>
+                                            <div style={{ color: '#f36100' }}>{DAYS_NAMES[idx]}</div>
+                                            <div style={{ fontSize: 11, color: '#aaa', fontWeight: 'normal' }}>
+                                                {day.toLocaleDateString('es-EC', { day: 'numeric', month: 'numeric' })}
+                                            </div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {HOURLY_SLOTS.map(hour => {
+                                    const timeLabel = `${String(hour).padStart(2, '0')}:00 - ${String(hour + 1).padStart(2, '0')}:00`;
+                                    return (
+                                        <tr key={hour} style={styles.row}>
+                                            <td style={styles.timeCell}>{timeLabel}</td>
+                                            {weekDays.map((day, idx) => {
+                                                const res = getReservaForSlot(day, hour);
+                                                return (
+                                                    <td key={idx} style={styles.slotCell}>
+                                                        {res ? (
+                                                            <div style={{
+                                                                ...styles.reservedCard,
+                                                                background: res.estado === 'CANCELADA' ? 'rgba(244, 67, 54, 0.15)' : 'rgba(243, 97, 0, 0.15)',
+                                                                borderLeft: `4px solid ${res.estado === 'CANCELADA' ? '#f44336' : '#f36100'}`,
+                                                                cursor: isAdmin ? 'pointer' : 'default'
+                                                            }}
+                                                            onClick={() => {
+                                                                if (isAdmin) {
+                                                                    setSelectedReserva(res);
+                                                                    setModal('edit');
+                                                                    setError('');
+                                                                }
+                                                            }}>
+                                                                <div style={styles.resSocio}>👤 {res.socio_nombre || sociosMap[res.socio] || 'Bloqueo / Clase'}</div>
+                                                                {res.entrenador && (
+                                                                    <div style={styles.resTrainer}>💪 {entrenadoresMap[res.entrenador]}</div>
+                                                                )}
+                                                                <div style={{
+                                                                    ...styles.resStatus,
+                                                                    color: res.estado === 'CONFIRMADA' ? '#4caf50' : res.estado === 'CANCELADA' ? '#f44336' : '#2196f3'
+                                                                }}>
+                                                                    {res.estado}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div
+                                                                style={styles.freeCard}
+                                                                onClick={() => handleSlotClick(day, hour)}
+                                                                title="Hacer clic para reservar esta hora"
+                                                            >
+                                                                <span style={{ color: '#4caf50', fontSize: 11 }}>➕ Libre</span>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Vista 2: Listado CRUD (para Admins) */}
+            {viewMode === 'list' && (
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={styles.table}>
+                        <thead>
+                            <tr>
+                                {listColumns.map(c => (
+                                    <th key={c.key} style={styles.th}>{c.label}</th>
+                                ))}
+                                <th style={styles.th}>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {reservas.length === 0 ? (
+                                <tr>
+                                    <td colSpan={listColumns.length + 1} style={{ textAlign: 'center', color: '#888', padding: 20 }}>
+                                        Sin registros de reservas.
+                                    </td>
+                                </tr>
+                            ) : (
+                                reservas.map(row => (
+                                    <tr key={row.id} style={styles.tr}>
+                                        {listColumns.map(c => (
+                                            <td key={c.key} style={styles.td}>
+                                                {c.render ? c.render(row[c.key], row) : String(row[c.key] ?? '-')}
+                                            </td>
+                                        ))}
+                                        <td style={styles.td}>
+                                            <button onClick={() => { setSelectedReserva(row); setModal('edit'); setError(''); }} style={styles.btnEdit}><Icon name="edit" /></button>
+                                            <button onClick={() => handleDelete(row)} style={styles.btnDelete}><Icon name="delete" /></button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {/* Modal de Formulario */}
+            {modal && (
+                <Modal title={modal === 'create' ? "Nueva Reserva de Clase" : "Editar Reserva"} onClose={() => setModal(null)}>
+                    <ReservaForm
+                        initial={selectedReserva || {}}
+                        onSave={handleSave}
+                        onCancel={() => setModal(null)}
+                        currentUser={currentUser}
+                    />
+                </Modal>
+            )}
+
+            {/* Modal de Ticket de Confirmación */}
+            {ticketData && (
+                <div style={styles.overlay}>
+                    <div style={{ ...styles.modal, maxWidth: '400px', border: '2px solid #f36100' }}>
+                        <div style={{ ...styles.modalHeader, background: '#111', borderBottom: '1px dashed #f36100' }}>
+                            <h4 style={{ color: '#f36100', margin: 0, letterSpacing: '1px' }}>🎫 CONFIRMACIÓN DE TURNO</h4>
+                            <button onClick={() => setTicketData(null)} style={styles.closeBtn}><Icon name="close" /></button>
+                        </div>
+                        <div style={{ padding: '24px', background: '#151515', color: '#fff', fontFamily: 'monospace' }}>
+                            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                                <h3 style={{ margin: '0 0 5px 0', color: '#f36100' }}>GYM RESERVA</h3>
+                                <p style={{ fontSize: '12px', color: '#aaa', margin: 0 }}>¡Tu reserva ha sido procesada con éxito!</p>
+                            </div>
+                            <hr style={{ borderTop: '1px dashed #333', margin: '15px 0' }} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
+                                <div><strong>Nº RESERVA:</strong> #{ticketData.id}</div>
+                                <div><strong>SOCIO:</strong> {ticketData.socio}</div>
+                                <div><strong>SALA/ZONA:</strong> {ticketData.zona}</div>
+                                <div><strong>ENTRENADOR:</strong> {ticketData.entrenador}</div>
+                                <div><strong>FECHA Y HORA:</strong> {ticketData.fecha}</div>
+                                <div><strong>ESTADO:</strong> <span style={{ color: '#4caf50', fontWeight: 'bold' }}>{ticketData.estado}</span></div>
+                            </div>
+                            <hr style={{ borderTop: '1px dashed #333', margin: '20px 0' }} />
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button
+                                    onClick={() => window.print()}
+                                    style={{ ...styles.btnPrimary, flex: 1, justifyContent: 'center' }}
+                                >
+                                    🖨️ Imprimir
+                                </button>
+                                <button
+                                    onClick={() => setTicketData(null)}
+                                    style={{ ...styles.btnSecondary, flex: 1, justifyContent: 'center' }}
+                                >
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Sección CRUD genérica ────────────────────────────────────────────────────
 function CrudSection({ title, icon, service, columns, FormComponent, rowKey = 'id' }) {
     const [data, setData] = useState([]);
@@ -357,17 +875,7 @@ function DashboardHome() {
                 <StatCard label="Entrenadores" value={stats.entrenadores} icon="entrenadores" color="#4caf50" />
                 <StatCard label="Reservas Totales" value={stats.reservas} icon="reservas" color="#ff9800" />
             </div>
-            <div style={{ marginTop: 32, padding: 20, background: '#1a1a1a', borderRadius: 12 }}>
-                <h5 style={{ color: '#fff', marginBottom: 12 }}>ℹ️ Información del Sistema</h5>
-                <p style={{ color: '#aaa', margin: 0 }}>
-                    Panel administrativo conectado a <strong style={{ color: '#f36100' }}>Django REST API</strong> en{' '}
-                    <code style={{ color: '#4caf50' }}>http://127.0.0.1:8000/api/</code>.
-                    Autenticación mediante <strong style={{ color: '#f36100' }}>JWT (Bearer Token)</strong>.
-                </p>
-                <p style={{ color: '#aaa', marginTop: 8, marginBottom: 0 }}>
-                    Usa el menú lateral para gestionar Socios, Membresías, Zonas, Entrenadores y Reservas.
-                </p>
-            </div>
+
         </div>
     );
 }
@@ -379,13 +887,19 @@ export default function AdminDashboard() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
 
     const menuItems = [
-        { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { key: 'socios', label: 'Socios', icon: 'socios' },
-        { key: 'membresias', label: 'Membresías', icon: 'membresias' },
-        { key: 'zonas', label: 'Zonas', icon: 'zonas' },
-        { key: 'entrenadores', label: 'Entrenadores', icon: 'entrenadores' },
-        { key: 'reservas', label: 'Reservas', icon: 'reservas' },
-    ];
+        { key: 'dashboard', label: 'Dashboard', icon: 'dashboard', roles: ['ADMIN'] },
+        { key: 'socios', label: 'Socios', icon: 'socios', roles: ['ADMIN'] },
+        { key: 'membresias', label: 'Membresías', icon: 'membresias', roles: ['ADMIN'] },
+        { key: 'zonas', label: 'Zonas', icon: 'zonas', roles: ['ADMIN'] },
+        { key: 'entrenadores', label: 'Entrenadores', icon: 'entrenadores', roles: ['ADMIN'] },
+        { key: 'reservas', label: 'Reservas', icon: 'reservas', roles: ['ADMIN', 'ENTRENADOR', 'SOCIO'] },
+    ].filter(item => item.roles.includes(user?.role || 'ADMIN'));
+
+    useEffect(() => {
+        if (user && user.role !== 'ADMIN') {
+            setActiveTab('reservas');
+        }
+    }, [user]);
 
     const renderContent = () => {
         switch (activeTab) {
@@ -440,24 +954,7 @@ export default function AdminDashboard() {
                     ]}
                 />
             );
-            case 'reservas': return (
-                <CrudSection title="Reservas de Clases" icon="reservas" service={reservasService}
-                    FormComponent={({ onCancel }) => (
-                        <div>
-                            <p style={{ color: '#aaa' }}>Para crear reservas usa el API directamente o agrega el formulario con IDs de socio, zona y entrenador.</p>
-                            <button onClick={onCancel} style={styles.btnSecondary}>Cerrar</button>
-                        </div>
-                    )}
-                    columns={[
-                        { key: 'id', label: '#' },
-                        { key: 'socio', label: 'Socio ID' },
-                        { key: 'zona', label: 'Zona ID' },
-                        { key: 'entrenador', label: 'Entrenador ID' },
-                        { key: 'fecha_reserva', label: 'Fecha', render: (v) => v ? new Date(v).toLocaleString('es-EC') : '-' },
-                        { key: 'estado', label: 'Estado' },
-                    ]}
-                />
-            );
+            case 'reservas': return <ReservasUnifiedView currentUser={user} />;
             default: return null;
         }
     };
@@ -616,5 +1113,119 @@ const styles = {
     errorMsg: {
         background: '#b71c1c', color: '#ffcdd2', padding: '10px 16px',
         borderRadius: 6, marginBottom: 16, fontSize: 13,
+    },
+    calendarSubHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        background: '#151515',
+        padding: '12px 16px',
+        borderRadius: '8px',
+        border: '1px solid #222',
+        marginBottom: '12px'
+    },
+    navigation: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+    navBtn: {
+        background: '#333',
+        color: '#fff',
+        border: 'none',
+        padding: '8px 14px',
+        borderRadius: 6,
+        cursor: 'pointer',
+        fontSize: 13,
+        transition: 'background 0.2s',
+    },
+    weekTitle: { color: '#fff', fontWeight: 600, fontSize: 14, marginLeft: 8 },
+    timeColHeader: {
+        background: '#1e1e1e',
+        color: '#f36100',
+        padding: '12px',
+        textAlign: 'center',
+        fontWeight: 'bold',
+        fontSize: 13,
+        borderBottom: '2px solid #333',
+        width: '100px'
+    },
+    dayColHeader: {
+        background: '#1e1e1e',
+        padding: '12px',
+        textAlign: 'center',
+        fontWeight: 'bold',
+        fontSize: 13,
+        borderBottom: '2px solid #333',
+        minWidth: '120px'
+    },
+    row: { borderBottom: '1px solid #222' },
+    timeCell: {
+        background: '#151515',
+        color: '#ccc',
+        textAlign: 'center',
+        padding: '12px 8px',
+        fontSize: 12,
+        fontWeight: 600,
+        borderRight: '1px solid #222'
+    },
+    slotCell: {
+        padding: '6px',
+        background: '#0e0e0e',
+        height: '60px',
+        verticalAlign: 'middle',
+        borderRight: '1px solid #1f1f1f'
+    },
+    reservedCard: {
+        borderRadius: 6,
+        padding: '8px',
+        fontSize: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+    },
+    resSocio: { color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    resTrainer: { color: '#bbb', fontSize: 11 },
+    resStatus: { fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase', marginTop: 2 },
+    freeCard: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        borderRadius: 6,
+        border: '1px dashed #222',
+        background: 'rgba(0,0,0,0.2)',
+        transition: 'all 0.2s',
+        cursor: 'pointer'
+    },
+    toggleGroup: { display: 'flex', background: '#222', borderRadius: '6px', padding: '2px' },
+    toggleBtn: {
+        border: 'none',
+        color: '#fff',
+        padding: '6px 12px',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        transition: 'background 0.2s'
+    },
+    header: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 16,
+        marginBottom: 20,
+        background: '#151515',
+        padding: 16,
+        borderRadius: 8,
+        border: '1px solid #222'
+    },
+    selectorGroup: { display: 'flex', alignItems: 'center', gap: 10 },
+    select: {
+        background: '#111',
+        border: '1px solid #333',
+        borderRadius: 6,
+        padding: '8px 12px',
+        color: '#fff',
+        fontSize: 14,
+        outline: 'none',
+        cursor: 'pointer'
     },
 };

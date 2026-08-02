@@ -1,7 +1,9 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 # CRUD 1: Socios
 class Socio(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='socio_profile')
     cedula = models.CharField(max_length=10, unique=True)
     nombre = models.CharField(max_length=100)
     apellido = models.CharField(max_length=100)
@@ -37,6 +39,7 @@ class ZonaGym(models.Model):
 
 # CRUD 4: Entrenadores
 class Entrenador(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='entrenador_profile')
     nombre = models.CharField(max_length=100)
     apellido = models.CharField(max_length=100)
     especialidad = models.CharField(max_length=100) # Ej: Crossfit, Musculación, Yoga
@@ -53,11 +56,11 @@ class ReservaClase(models.Model):
         ('CANCELADA', 'Cancelada'),
         ('ASISTIO', 'Asistió'),
     ]
-    socio = models.ForeignKey(Socio, on_delete=models.CASCADE, related_name='reservas')
+    socio = models.ForeignKey(Socio, on_delete=models.CASCADE, related_name='reservas', null=True, blank=True)
     zona = models.ForeignKey(ZonaGym, on_delete=models.CASCADE, related_name='reservas')
     entrenador = models.ForeignKey(Entrenador, on_delete=models.SET_NULL, null=True, blank=True)
     fecha_reserva = models.DateTimeField()
     estado = models.CharField(max_length=20, choices=ESTADOS, default='CONFIRMADA')
 
     def __str__(self):
-        return f"Reserva de {self.socio} en {self.zona} ({self.fecha_reserva})"
+        return f"Reserva de {self.socio if self.socio else 'Zona (Sin Socio)'} en {self.zona} ({self.fecha_reserva})"
