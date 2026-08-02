@@ -37,3 +37,14 @@ const Socios = () => {
       console.error('Error al crear socio:', error);
     }
   };
+   // 3. ELIMINAR (DELETE)
+  const handleDelete = async (id) => {
+    if (window.confirm('¿Seguro que deseas eliminar este socio?')) {
+      try {
+        await api.delete(`socios/${id}/`);
+        cargarSocios();
+      } catch (error) {
+        console.error('Error al eliminar socio:', error);
+      }
+    }
+  };
