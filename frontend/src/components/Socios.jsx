@@ -11,3 +11,17 @@ const Socios = () => {
     telefono: '',
     fecha_nacimiento: '',
   });
+
+  // 1. LEER (GET)
+  const cargarSocios = async () => {
+    try {
+      const response = await api.get('socios/');
+      setSocios(response.data);
+    } catch (error) {
+      console.error('Error al cargar socios:', error);
+    }
+  };
+
+  useEffect(() => {
+    cargarSocios();
+  }, []);
