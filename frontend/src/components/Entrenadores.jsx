@@ -11,7 +11,7 @@ const Entrenadores = () => {
     email: '',
   });
 
-  // 1. LEER (GET)
+  
   const cargarEntrenadores = async () => {
     try {
       const response = await api.get('entrenadores/');
@@ -25,7 +25,7 @@ const Entrenadores = () => {
     cargarEntrenadores();
   }, []);
 
-  // 2. CREAR (POST)
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -37,7 +37,7 @@ const Entrenadores = () => {
     }
   };
 
-  // 3. ELIMINAR (DELETE)
+  
   const handleDelete = async (id) => {
     if (window.confirm('¿Seguro que deseas eliminar este entrenador?')) {
       try {
