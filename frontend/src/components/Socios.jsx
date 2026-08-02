@@ -25,3 +25,15 @@ const Socios = () => {
   useEffect(() => {
     cargarSocios();
   }, []);
+  
+  // 2. CREAR (POST)
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('socios/', nuevoSocio);
+      setNuevoSocio({ cedula: '', nombre: '', apellido: '', email: '', telefono: '', fecha_nacimiento: '' });
+      cargarSocios();
+    } catch (error) {
+      console.error('Error al crear socio:', error);
+    }
+  };
