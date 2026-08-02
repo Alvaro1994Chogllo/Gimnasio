@@ -9,6 +9,7 @@
  * Módulos: Dashboard, Socios, Membresías, Zonas, Entrenadores, Reservas
  */
 
+
 import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import {
@@ -389,7 +390,20 @@ export default function AdminDashboard() {
     const renderContent = () => {
         switch (activeTab) {
             case 'dashboard': return <DashboardHome />;
-       case 'socios': return <Socios />;
+            case 'socios': return (
+                <CrudSection title="Socios" icon="socios" service={sociosService}
+                    FormComponent={SocioForm}
+                    columns={[
+                        { key: 'id', label: '#' },
+                        { key: 'cedula', label: 'Cédula' },
+                        { key: 'nombre', label: 'Nombre' },
+                        { key: 'apellido', label: 'Apellido' },
+                        { key: 'email', label: 'Email' },
+                        { key: 'telefono', label: 'Teléfono' },
+                        { key: 'activo', label: 'Estado', render: (v) => v ? '✅ Activo' : '❌ Inactivo' },
+                    ]}
+                />
+            );
             case 'membresias': return (
                 <CrudSection title="Membresías" icon="membresias" service={membresiasService}
                     FormComponent={MembresiaForm}
