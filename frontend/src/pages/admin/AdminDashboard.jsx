@@ -18,6 +18,7 @@ import {
     entrenadoresService,
     reservasService,
 } from '../../services/api';
+import Socios from '../../components/Socios';
 
 // ─── Íconos SVG simples ───────────────────────────────────────────────────────
 const Icon = ({ name }) => {
