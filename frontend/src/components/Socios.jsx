@@ -11,6 +11,3 @@ const Socios = () => {
     telefono: '',
     fecha_nacimiento: '',
   });
-};
-
-export default Socios;
