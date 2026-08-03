@@ -82,11 +82,11 @@ export default function Home() {
         <nav className="canvas-menu mobile-menu">
             <ul>
                 <li><a href="./index.html">Home</a></li>
-                <li><a href="./about-us.html">About Us</a></li>
-                <li><a href="./classes.html">Classes</a></li>
-                <li><a href="./services.html">Services</a></li>
-                <li><a href="./team.html">Our Team</a></li>
-                <li><a href="#">Pages</a>
+                <li><a href="./about-us.html">Sobre Nosotros</a></li>
+                <li><a href="./classes.html">Clases</a></li>
+                <li><a href="./services.html">Servicios</a></li>
+                <li><a href="./team.html">Nuestro grupo</a></li>
+                <li><a href="#">Páginas</a>
                     <ul className="dropdown">
                         <li><a href="./about-us.html">About us</a></li>
                         <li><a href="./class-timetable.html">Classes timetable</a></li>

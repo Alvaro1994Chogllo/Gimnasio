@@ -12,7 +12,7 @@ const Socios = () => {
     fecha_nacimiento: '',
   });
 
-  // 1. LEER (GET)
+  
   const cargarSocios = async () => {
     try {
       const response = await api.get('socios/');
@@ -26,7 +26,7 @@ const Socios = () => {
     cargarSocios();
   }, []);
   
-  // 2. CREAR (POST)
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -37,7 +37,7 @@ const Socios = () => {
       console.error('Error al crear socio:', error);
     }
   };
-   // 3. ELIMINAR (DELETE)
+   
   const handleDelete = async (id) => {
     if (window.confirm('¿Seguro que deseas eliminar este socio?')) {
       try {

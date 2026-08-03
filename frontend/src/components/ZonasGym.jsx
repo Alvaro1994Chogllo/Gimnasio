@@ -5,7 +5,7 @@ const ZonasGym = () => {
   const [zonas, setZonas] = useState([]);
   const [nuevaZona, setNuevaZona] = useState({ nombre: '', descripcion: '', capacidad_maxima: 20 });
 
-  // 1. LEER (GET)
+ 
   const cargarZonas = async () => {
     try {
       const response = await api.get('zonas/');
@@ -19,7 +19,7 @@ const ZonasGym = () => {
     cargarZonas();
   }, []);
 
-  // 2. CREAR (POST)
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -31,7 +31,7 @@ const ZonasGym = () => {
     }
   };
 
-  // 3. ELIMINAR (DELETE)
+  
   const handleDelete = async (id) => {
     if (window.confirm('¿Seguro que deseas eliminar esta zona?')) {
       try {

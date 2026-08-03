@@ -231,7 +231,7 @@ function ReservaForm({ initial = {}, onSave, onCancel, currentUser }) {
         }).finally(() => setLoadingOpts(false));
     }, []);
 
-    // Asegurarse de que si es Socio o Entrenador, se guarden sus IDs correctos al iniciar
+    
     useEffect(() => {
         if (isSocio && currentUser.socio_id) {
             setForm(prev => ({ ...prev, socio: currentUser.socio_id }));
