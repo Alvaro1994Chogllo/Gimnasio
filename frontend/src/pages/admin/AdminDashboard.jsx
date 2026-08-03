@@ -169,7 +169,7 @@ function ZonaForm({ initial = {}, onSave, onCancel }) {
 
 function EntrenadorForm({ initial = {}, onSave, onCancel }) {
     const [form, setForm] = useState({
-        nombre: '', apellido: '', especialidad: '', telefono: '', email: '', ...initial,
+        nombre: '', apellido: '', especialidad: '', telefono: '', email: '', capacidad_por_hora: 1, ...initial,
     });
     const f = (k) => (e) => setForm({ ...form, [k]: e.target.value });
     return (
@@ -189,6 +189,9 @@ function EntrenadorForm({ initial = {}, onSave, onCancel }) {
                 </label>
                 <label style={styles.label}>Teléfono
                     <input style={styles.input} value={form.telefono} onChange={f('telefono')} />
+                </label>
+                <label style={styles.label}>Capacidad por hora *
+                    <input style={styles.input} type="number" min="1" value={form.capacidad_por_hora} onChange={f('capacidad_por_hora')} required />
                 </label>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
@@ -326,6 +329,7 @@ function ReservasUnifiedView({ currentUser }) {
     const [reservas, setReservas] = useState([]);
     const [sociosMap, setSociosMap] = useState({});
     const [entrenadoresMap, setEntrenadoresMap] = useState({});
+    const [entrenadores, setEntrenadores] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState(null); // null | 'create' | 'edit'
     const [selectedReserva, setSelectedReserva] = useState(null);
@@ -374,6 +378,7 @@ function ReservasUnifiedView({ currentUser }) {
             const eMap = {};
             eRes.data.forEach(e => { eMap[e.id] = `${e.nombre} ${e.apellido}`; });
             setEntrenadoresMap(eMap);
+            setEntrenadores(eRes.data);
         } catch (err) {
             setError('Error al cargar datos base del sistema.');
         } finally {
@@ -439,8 +444,8 @@ function ReservasUnifiedView({ currentUser }) {
         }
     };
 
-    const getReservaForSlot = (day, hour) => {
-        return reservas.find(r => {
+    const getSlotInfo = (day, hour) => {
+        const slotReservas = reservas.filter(r => {
             const rDate = new Date(r.fecha_reserva);
             return Number(r.zona) === Number(selectedZona) &&
                    rDate.getFullYear() === day.getFullYear() &&
@@ -448,6 +453,34 @@ function ReservasUnifiedView({ currentUser }) {
                    rDate.getDate() === day.getDate() &&
                    rDate.getHours() === hour;
         });
+
+        const activeReservas = slotReservas.filter(r => r.estado !== 'CANCELADA');
+        const zona = zonas.find(z => Number(z.id) === Number(selectedZona));
+        const zonaFull = zona ? activeReservas.length >= Number(zona.capacidad_maxima || 0) : false;
+
+        const trainerCounts = activeReservas.reduce((acc, reserva) => {
+            if (reserva.entrenador) {
+                acc[reserva.entrenador] = (acc[reserva.entrenador] || 0) + 1;
+            }
+            return acc;
+        }, {});
+
+        const trainersFull = Object.entries(trainerCounts)
+            .filter(([trainerId, count]) => {
+                const trainer = entrenadores.find(e => Number(e.id) === Number(trainerId));
+                return trainer && count >= Number(trainer.capacidad_por_hora || 1);
+            })
+            .map(([trainerId]) => trainerId);
+
+        return {
+            slotReservas,
+            activeReservas,
+            zoneFull: zonaFull,
+            trainersFull,
+            firstReserva: slotReservas[0] || null,
+            count: activeReservas.length,
+            zoneCapacity: zona?.capacidad_maxima || 0,
+        };
     };
 
     const handleSlotClick = (day, hour) => {
@@ -541,9 +574,9 @@ function ReservasUnifiedView({ currentUser }) {
                 <div>
                     <div style={styles.calendarSubHeader}>
                         <div style={styles.navigation}>
-                            <button onClick={() => setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() - 7)))} style={styles.navBtn}>◀ Anterior</button>
-                            <button onClick={() => setCurrentDate(new Date())} style={styles.navBtn}>Hoy</button>
-                            <button onClick={() => setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() + 7)))} style={styles.navBtn}>Siguiente ▶</button>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() - 7)))} style={styles.controlBtn}>◀ Anterior</button>
+                            <button onClick={() => setCurrentDate(new Date())} style={styles.controlBtn}>Hoy</button>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() + 7)))} style={styles.controlBtn}>Siguiente ▶</button>
                             <span style={styles.weekTitle}>
                                 Semana del {monday.toLocaleDateString('es-EC', { day: 'numeric', month: 'short' })} al {weekDays[6].toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' })}
                             </span>
@@ -572,43 +605,69 @@ function ReservasUnifiedView({ currentUser }) {
                                         <tr key={hour} style={styles.row}>
                                             <td style={styles.timeCell}>{timeLabel}</td>
                                             {weekDays.map((day, idx) => {
-                                                const res = getReservaForSlot(day, hour);
                                                 return (
                                                     <td key={idx} style={styles.slotCell}>
-                                                        {res ? (
+                                                        {(() => {
+                                                const slotInfo = getSlotInfo(day, hour);
+                                                const occupied = slotInfo.zoneFull;
+                                                const hasReservations = slotInfo.count > 0;
+                                                const firstRes = slotInfo.firstReserva;
+
+                                                if (occupied) {
+                                                    return (
+                                                        <div style={{
+                                                            ...styles.reservedCard,
+                                                            background: 'rgba(244, 67, 54, 0.18)',
+                                                            borderLeft: '4px solid #f44336',
+                                                            cursor: 'not-allowed'
+                                                        }}>
+                                                            <div style={styles.resSocio}>🚫 OCUPADO</div>
+                                                            <div style={styles.resTrainer}>Zona a capacidad: {slotInfo.count}/{slotInfo.zoneCapacity}</div>
+                                                            <div style={{ ...styles.resStatus, color: '#f44336' }}>Capacidad completa</div>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                if (hasReservations) {
+                                                    const trainerName = firstRes?.entrenador ? entrenadoresMap[firstRes.entrenador] : null;
+                                                    return (
+                                                        <div style={{
+                                                            ...styles.reservedCard,
+                                                            background: 'rgba(243, 97, 0, 0.15)',
+                                                            borderLeft: '4px solid #f36100',
+                                                            cursor: isAdmin ? 'pointer' : 'default'
+                                                        }}
+                                                        onClick={() => {
+                                                            if (isAdmin && firstRes) {
+                                                                setSelectedReserva(firstRes);
+                                                                setModal('edit');
+                                                                setError('');
+                                                            }
+                                                        }}>
+                                                            <div style={styles.resSocio}>👥 {slotInfo.count} reserva(s)</div>
+                                                            {trainerName && (
+                                                                <div style={styles.resTrainer}>💪 {trainerName}</div>
+                                                            )}
                                                             <div style={{
-                                                                ...styles.reservedCard,
-                                                                background: res.estado === 'CANCELADA' ? 'rgba(244, 67, 54, 0.15)' : 'rgba(243, 97, 0, 0.15)',
-                                                                borderLeft: `4px solid ${res.estado === 'CANCELADA' ? '#f44336' : '#f36100'}`,
-                                                                cursor: isAdmin ? 'pointer' : 'default'
-                                                            }}
-                                                            onClick={() => {
-                                                                if (isAdmin) {
-                                                                    setSelectedReserva(res);
-                                                                    setModal('edit');
-                                                                    setError('');
-                                                                }
+                                                                ...styles.resStatus,
+                                                                color: firstRes?.estado === 'CONFIRMADA' ? '#4caf50' : firstRes?.estado === 'CANCELADA' ? '#f44336' : '#2196f3'
                                                             }}>
-                                                                <div style={styles.resSocio}>👤 {res.socio_nombre || sociosMap[res.socio] || 'Bloqueo / Clase'}</div>
-                                                                {res.entrenador && (
-                                                                    <div style={styles.resTrainer}>💪 {entrenadoresMap[res.entrenador]}</div>
-                                                                )}
-                                                                <div style={{
-                                                                    ...styles.resStatus,
-                                                                    color: res.estado === 'CONFIRMADA' ? '#4caf50' : res.estado === 'CANCELADA' ? '#f44336' : '#2196f3'
-                                                                }}>
-                                                                    {res.estado}
-                                                                </div>
+                                                                {firstRes?.estado || 'OCUPADO'}
                                                             </div>
-                                                        ) : (
-                                                            <div
-                                                                style={styles.freeCard}
-                                                                onClick={() => handleSlotClick(day, hour)}
-                                                                title="Hacer clic para reservar esta hora"
-                                                            >
-                                                                <span style={{ color: '#4caf50', fontSize: 11 }}>➕ Libre</span>
-                                                            </div>
-                                                        )}
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <div
+                                                        style={styles.freeCard}
+                                                        onClick={() => handleSlotClick(day, hour)}
+                                                        title="Hacer clic para reservar esta hora"
+                                                    >
+                                                        <span style={{ color: '#4caf50', fontSize: 11 }}>➕ Libre</span>
+                                                    </div>
+                                                );
+                                            })()}
                                                     </td>
                                                 );
                                             })}
@@ -893,7 +952,17 @@ export default function AdminDashboard() {
         { key: 'zonas', label: 'Zonas', icon: 'zonas', roles: ['ADMIN'] },
         { key: 'entrenadores', label: 'Entrenadores', icon: 'entrenadores', roles: ['ADMIN'] },
         { key: 'reservas', label: 'Reservas', icon: 'reservas', roles: ['ADMIN', 'ENTRENADOR', 'SOCIO'] },
-    ].filter(item => item.roles.includes(user?.role || 'ADMIN'));
+    ].filter(item => item.roles?.includes(user?.role || 'ADMIN'));
+
+    const getActiveTabLabel = (tab) => {
+        const menu = menuItems.find(item => item.key === tab);
+        if (menu) return menu.label;
+        for (const parent of menuItems) {
+            const child = parent.children?.find(c => c.key === tab);
+            if (child) return child.label;
+        }
+        return tab;
+    };
 
     useEffect(() => {
         if (user && user.role !== 'ADMIN') {
@@ -971,19 +1040,26 @@ export default function AdminDashboard() {
                 </div>
 
                 <nav style={{ flex: 1 }}>
-                    {menuItems.map(item => (
-                        <button key={item.key}
-                            onClick={() => setActiveTab(item.key)}
-                            style={{
-                                ...styles.navBtn,
-                                background: activeTab === item.key ? '#f36100' : 'transparent',
-                                color: activeTab === item.key ? '#fff' : '#ccc',
-                                justifyContent: sidebarOpen ? 'flex-start' : 'center',
-                            }}>
-                            <span style={{ fontSize: 18 }}><Icon name={item.icon} /></span>
-                            {sidebarOpen && <span style={{ marginLeft: 10 }}>{item.label}</span>}
-                        </button>
-                    ))}
+                    {menuItems.map(item => {
+                        const active = activeTab === item.key;
+                        return (
+                            <div key={item.key}>
+                                <button
+                                    onClick={() => setActiveTab(item.key)}
+                                    style={{
+                                        ...styles.navBtn,
+                                        background: active ? '#222' : 'transparent',
+                                        color: '#ccc',
+                                        justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                                        fontWeight: '700',
+                                    }}
+                                >
+                                    <span style={{ fontSize: 18 }}><Icon name={item.icon} /></span>
+                                    {sidebarOpen && <span style={{ marginLeft: 10 }}>{item.label}</span>}
+                                </button>
+                            </div>
+                        );
+                    })}
                 </nav>
 
                 <button onClick={logout} style={{ ...styles.navBtn, color: '#ff6b6b', marginTop: 'auto', justifyContent: sidebarOpen ? 'flex-start' : 'center' }}>
@@ -997,7 +1073,7 @@ export default function AdminDashboard() {
                 {/* Top bar */}
                 <header style={styles.topBar}>
                     <h6 style={{ margin: 0, color: '#fff' }}>
-                        {menuItems.find(m => m.key === activeTab)?.label || 'Dashboard'}
+                        {getActiveTabLabel(activeTab)}
                     </h6>
                     <div style={{ color: '#aaa', fontSize: 13 }}>
                         👤 <strong style={{ color: '#f36100' }}>{user?.username || 'Admin'}</strong>
@@ -1125,7 +1201,7 @@ const styles = {
         marginBottom: '12px'
     },
     navigation: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-    navBtn: {
+    controlBtn: {
         background: '#333',
         color: '#fff',
         border: 'none',
@@ -1133,6 +1209,26 @@ const styles = {
         borderRadius: 6,
         cursor: 'pointer',
         fontSize: 13,
+        transition: 'background 0.2s',
+    },
+    subMenu: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        paddingLeft: 12,
+        marginBottom: 8,
+    },
+    subNavBtn: {
+        background: 'transparent',
+        width: '100%',
+        textAlign: 'left',
+        border: 'none',
+        padding: '10px 16px',
+        borderRadius: 6,
+        cursor: 'pointer',
+        fontSize: 13,
+        display: 'flex',
+        alignItems: 'center',
         transition: 'background 0.2s',
     },
     weekTitle: { color: '#fff', fontWeight: 600, fontSize: 14, marginLeft: 8 },

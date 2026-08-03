@@ -1,5 +1,8 @@
-from rest_framework import serializers
+from datetime import timedelta
+
 from django.contrib.auth.models import User
+from django.utils import timezone
+from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import Socio, Membresia, ZonaGym, Entrenador, ReservaClase
 
@@ -107,3 +110,43 @@ class ReservaClaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReservaClase
         fields = '__all__'
+
+    def validate(self, data):
+        zona = data.get('zona') or getattr(self.instance, 'zona', None)
+        fecha_reserva = data.get('fecha_reserva') or getattr(self.instance, 'fecha_reserva', None)
+        entrenador = data.get('entrenador') or getattr(self.instance, 'entrenador', None)
+
+        if not zona:
+            raise serializers.ValidationError({'zona': 'La zona es obligatoria.'})
+        if not fecha_reserva:
+            raise serializers.ValidationError({'fecha_reserva': 'La fecha y hora de la reserva son obligatorias.'})
+
+        if isinstance(fecha_reserva, str):
+            try:
+                fecha_reserva = timezone.datetime.fromisoformat(fecha_reserva)
+            except ValueError:
+                raise serializers.ValidationError({'fecha_reserva': 'Formato de fecha/hora no válido.'})
+        if timezone.is_naive(fecha_reserva):
+            fecha_reserva = timezone.make_aware(fecha_reserva, timezone.get_current_timezone())
+
+        slot_start = fecha_reserva.replace(minute=0, second=0, microsecond=0)
+        slot_end = slot_start + timedelta(hours=1)
+
+        reservas_mismo_slot = ReservaClase.objects.filter(
+            zona=zona,
+            fecha_reserva__gte=slot_start,
+            fecha_reserva__lt=slot_end,
+        ).exclude(estado='CANCELADA')
+
+        if self.instance is not None:
+            reservas_mismo_slot = reservas_mismo_slot.exclude(id=self.instance.id)
+
+        if reservas_mismo_slot.count() >= zona.capacidad_maxima:
+            raise serializers.ValidationError({'fecha_reserva': 'La zona ya alcanzó su capacidad máxima para esa hora.'})
+
+        if entrenador is not None:
+            reservas_entrenador = reservas_mismo_slot.filter(entrenador=entrenador)
+            if reservas_entrenador.count() >= entrenador.capacidad_por_hora:
+                raise serializers.ValidationError({'entrenador': 'El entrenador ya alcanzó su capacidad de alumnos por hora en ese horario.'})
+
+        return data
