@@ -16,10 +16,19 @@ class Zona {
   factory Zona.fromJson(Map<String, dynamic> json) {
     return Zona(
       id: json['id'] as int,
-      nombre: json['nombre'] as String,
-      descripcion: json['descripcion'] as String? ?? '',
-      capacidadMaxima: json['capacidad_maxima'] as int,
-      disponible: json['disponible'] as bool,
+      nombre: (json['nombre'] ?? '') as String,
+      descripcion: (json['descripcion'] ?? '') as String,
+      capacidadMaxima: (json['capacidad_maxima'] ?? 10) as int,
+      disponible: (json['disponible'] ?? true) as bool,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'nombre': nombre,
+      'descripcion': descripcion,
+      'capacidad_maxima': capacidadMaxima,
+      'disponible': disponible,
+    };
   }
 }

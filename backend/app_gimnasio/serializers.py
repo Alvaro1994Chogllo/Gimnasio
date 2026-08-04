@@ -103,9 +103,20 @@ class EntrenadorSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class ReservaClaseSerializer(serializers.ModelSerializer):
-    socio_nombre = serializers.ReadOnlyField(source='socio.nombre')
+    socio_nombre = serializers.SerializerMethodField()
     zona_nombre = serializers.ReadOnlyField(source='zona.nombre')
-    entrenador_nombre = serializers.ReadOnlyField(source='entrenador.nombre')
+    entrenador_nombre = serializers.SerializerMethodField()
+
+    def get_socio_nombre(self, obj):
+        if obj.socio:
+            return f"{obj.socio.nombre} {obj.socio.apellido}"
+        return 'Sin Socio'
+
+    def get_entrenador_nombre(self, obj):
+        if obj.entrenador:
+            return f"{obj.entrenador.nombre} {obj.entrenador.apellido}"
+        return 'Sin Entrenador'
+
 
     class Meta:
         model = ReservaClase

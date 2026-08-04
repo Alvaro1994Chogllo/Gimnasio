@@ -129,7 +129,7 @@ export default function Login() {
                                         </div>
                                     )}
 
-                                    {/* Submit */}
+                                     {/* Submit */}
                                     <button
                                         type="submit"
                                         className="primary-btn"
@@ -147,6 +147,49 @@ export default function Login() {
                                         }
                                     </button>
                                 </form>
+
+                                {/* Guía de credenciales */}
+                                <div style={{
+                                    marginTop: '24px',
+                                    background: 'rgba(243,97,0,0.08)',
+                                    border: '1px solid rgba(243,97,0,0.3)',
+                                    borderRadius: '4px',
+                                    padding: '16px',
+                                }}>
+                                    <div style={{ color: '#f36100', fontWeight: '600', fontSize: '12px', letterSpacing: '1px', marginBottom: '10px' }}>
+                                        <i className="fa fa-info-circle" style={{ marginRight: '6px' }}></i>
+                                        GUÍA DE ACCESO
+                                    </div>
+                                    <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '1px solid #333' }}>
+                                                <th style={{ color: '#888', fontWeight: '500', padding: '4px 6px', textAlign: 'left' }}>Rol</th>
+                                                <th style={{ color: '#888', fontWeight: '500', padding: '4px 6px', textAlign: 'left' }}>Usuario</th>
+                                                <th style={{ color: '#888', fontWeight: '500', padding: '4px 6px', textAlign: 'left' }}>Contraseña</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td style={{ color: '#f36100', padding: '5px 6px' }}>Admin</td>
+                                                <td style={{ color: '#ccc', padding: '5px 6px' }}>admin</td>
+                                                <td style={{ color: '#ccc', padding: '5px 6px' }}>admin</td>
+                                            </tr>
+                                            <tr>
+                                                <td style={{ color: '#f36100', padding: '5px 6px' }}>Socio</td>
+                                                <td style={{ color: '#ccc', padding: '5px 6px' }}>Cédula</td>
+                                                <td style={{ color: '#ccc', padding: '5px 6px' }}>Cédula</td>
+                                            </tr>
+                                            <tr>
+                                                <td style={{ color: '#f36100', padding: '5px 6px' }}>Entrenador</td>
+                                                <td style={{ color: '#ccc', padding: '5px 6px' }}>Email</td>
+                                                <td style={{ color: '#ccc', padding: '5px 6px' }}>Teléfono*</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p style={{ color: '#666', fontSize: '11px', margin: '8px 0 0 0' }}>
+                                        * Si el teléfono tiene menos de 6 dígitos, la contraseña es <span style={{ color: '#f36100' }}>123456</span>
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>

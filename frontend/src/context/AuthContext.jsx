@@ -52,10 +52,14 @@ export const AuthProvider = ({ children }) => {
      * login: Cliente envía credenciales → Servidor Django valida y retorna JWT
      */
     const login = async (username, password) => {
+        if (!username?.trim() || !password?.trim()) {
+            return { success: false, message: 'Ingresa tu usuario y contraseña.' };
+        }
+
         try {
             const response = await axios.post(`${BASE_URL}/token/`, {
-                username,
-                password
+                username: username.trim(),
+                password: password.trim()
             });
             const { access, refresh } = response.data;
 
@@ -74,8 +78,9 @@ export const AuthProvider = ({ children }) => {
 
             return { success: true };
         } catch (error) {
-            const msg = error.response?.data?.detail || 'Error de conexión con el servidor';
-            return { success: false, message: msg };
+            const msg = error.response?.data?.detail;
+            const helpMsg = '\n💡 Admin: usuario "admin" / Socio: usa tu cédula / Entrenador: usa tu email';
+            return { success: false, message: (msg || 'Credenciales incorrectas.') + helpMsg };
         }
     };
 

@@ -16,13 +16,30 @@ class Membresia {
   });
 
   factory Membresia.fromJson(Map<String, dynamic> json) {
+    final precioRaw = json['precio'];
+    double precioDouble = 0.0;
+    if (precioRaw is String) {
+      precioDouble = double.tryParse(precioRaw) ?? 0.0;
+    } else if (precioRaw is num) {
+      precioDouble = precioRaw.toDouble();
+    }
     return Membresia(
       id: json['id'] as int,
-      nombre: json['nombre'] as String,
-      descripcion: json['descripcion'] as String? ?? '',
-      precio: (json['precio'] as num).toDouble(),
-      duracionDias: json['duracion_dias'] as int,
-      activa: json['activa'] as bool,
+      nombre: (json['nombre'] ?? '') as String,
+      descripcion: (json['descripcion'] ?? '') as String,
+      precio: precioDouble,
+      duracionDias: (json['duracion_dias'] ?? 30) as int,
+      activa: (json['activa'] ?? true) as bool,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'nombre': nombre,
+      'descripcion': descripcion,
+      'precio': precio,
+      'duracion_dias': duracionDias,
+      'activa': activa,
+    };
   }
 }

@@ -13,7 +13,7 @@ class GimnasioApp extends StatelessWidget {
     return MaterialApp(
       title: 'Gimnasio Mobile',
       theme: ThemeData.dark().copyWith(
-        colorScheme: ColorScheme.dark(
+        colorScheme: const ColorScheme.dark(
           primary: Colors.deepOrange,
           secondary: Colors.amber,
         ),

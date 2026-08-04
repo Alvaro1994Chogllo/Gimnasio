@@ -20,12 +20,23 @@ class Entrenador {
   factory Entrenador.fromJson(Map<String, dynamic> json) {
     return Entrenador(
       id: json['id'] as int,
-      nombre: json['nombre'] as String,
-      apellido: json['apellido'] as String,
-      especialidad: json['especialidad'] as String,
-      telefono: json['telefono'] as String? ?? '',
-      email: json['email'] as String,
-      capacidadPorHora: json['capacidad_por_hora'] as int,
+      nombre: (json['nombre'] ?? '') as String,
+      apellido: (json['apellido'] ?? '') as String,
+      especialidad: (json['especialidad'] ?? '') as String,
+      telefono: (json['telefono'] ?? '') as String,
+      email: (json['email'] ?? '') as String,
+      capacidadPorHora: (json['capacidad_por_hora'] ?? 1) as int,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'nombre': nombre,
+      'apellido': apellido,
+      'especialidad': especialidad,
+      'telefono': telefono,
+      'email': email,
+      'capacidad_por_hora': capacidadPorHora,
+    };
   }
 }
